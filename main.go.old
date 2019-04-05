@@ -1,0 +1,86 @@
+package main
+
+import (
+	"database/sql"
+	"encoding/json"
+	"log"
+	"net/http"
+	"os"
+
+	"github.com/gorilla/mux"
+	"github.com/lib/pq"
+	"github.com/subosito/gotenv"
+)
+
+// Book estrutura
+type Book struct {
+	ID     int    `json:"id"`
+	Title  string `json:"title"`
+	Author string `json:"author"`
+	Year   string `json:"year"`
+}
+
+func init() {
+	gotenv.Load()
+}
+
+var db *sql.DB
+
+func main() {
+
+	/*
+		`dbname`,
+		`host`,
+		`password`,
+		`port`,
+		`user`
+	*/
+
+	if pgURL, err := pq.ParseURL(os.Getenv("ELEPHANTSQL_URL")); err != nil {
+		log.Fatal(err)
+		if db, err := sql.Open("postgres", pgURL); err != nil {
+			log.Fatal(err)
+			if err = db.Ping(); err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
+
+	router := mux.NewRouter()
+
+	router.HandleFunc("/books", getBooks).Methods("GET")
+	router.HandleFunc("/books/{id}", getBook).Methods("GET")
+	router.HandleFunc("/books", addBook).Methods("POST")
+	router.HandleFunc("/books", updateBooks).Methods("PUT")
+	router.HandleFunc("/books/{id}", removeBooks).Methods("DELETE")
+
+	log.Fatal(http.ListenAndServe(":8000", router))
+}
+
+func getBooks(w http.ResponseWriter, r *http.Request) {
+	var book Book
+	books := make([]Book, 0)
+
+	rows, err := db.Query("select * from books")
+	if err == nil {
+		log.Println("ok")
+
+		for rows.Next() {
+			if err := rows.Scan(&book.ID, &book.Title, &book.Author, &book.Year); err != nil {
+				log.Fatal(err)
+			} else {
+				books = append(books, book)
+			}
+		}
+	} else {
+		log.Fatal(err)
+	}
+
+	defer rows.Close()
+
+	json.NewEncoder(w).Encode(books)
+}
+func getBook(w http.ResponseWriter, r *http.Request)     {}
+func addBook(w http.ResponseWriter, r *http.Request)     {}
+func updateBooks(w http.ResponseWriter, r *http.Request) {}
+func removeBooks(w http.ResponseWriter, r *http.Request) {}
